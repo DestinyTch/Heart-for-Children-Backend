@@ -1,1 +1,19 @@
+# Web Framework
+Flask==3.0.3
+Flask-Cors==4.0.1
+
+# Database
+Flask-PyMongo==2.3.0
+pymongo[srv]==4.6.3
+
+# File Storage & Integrations
+cloudinary==1.40.0
+requests==2.31.0
+
+# Environment & Infrastructure
+python-dotenv==1.0.1
+gunicorn==22.0.0
+
+# Testing
+pytest==8.2.1
 

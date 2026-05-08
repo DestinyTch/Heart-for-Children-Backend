@@ -29,7 +29,7 @@ class Config:
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Comma-separated list in .env, e.g. https://heartsforchildren.org,https://www.heartsforchildren.org
-    _origins_raw: str = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:5500")
+    _origins_raw: str = os.environ.get("ALLOWED_ORIGINS")
     ALLOWED_ORIGINS: list[str] = [o.strip() for o in _origins_raw.split(",") if o.strip()]
 
     # ── Upload constraints ────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ Hearts for Children — Flask REST API
 Entry point. Initialises extensions, registers blueprints, and starts the
 development server.
 """
-
+import os
 from flask import Flask
 from flask_cors import CORS
 from flask_pymongo import PyMongo

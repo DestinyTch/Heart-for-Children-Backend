@@ -27,6 +27,7 @@ class ValidationError(ValueError):
 
 
 def validate_email(email: str | None) -> str:
+    """Validate and normalize email address."""
     if not email or not isinstance(email, str):
         raise ValidationError("Email is required.")
     email = email.strip().lower()
@@ -36,6 +37,7 @@ def validate_email(email: str | None) -> str:
 
 
 def validate_method(method: str | None) -> str:
+    """Validate donation method."""
     VALID = {
         "btc", "sol", "usdt",
         "amazon", "apple", "steam", "sephora", "razer",

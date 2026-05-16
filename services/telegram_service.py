@@ -36,11 +36,11 @@ def _post(token: str, method: str, payload: dict[str, Any]) -> bool:
         resp = requests.post(url, json=payload, timeout=TIMEOUT)
         data = resp.json()
         if not data.get("ok"):
-            logger.error("Telegram %s failed: %s", method, data.get("description"))
+            logger.error(f"Telegram {method} failed: {data.get('description')}")
             return False
         return True
     except requests.RequestException as exc:
-        logger.error("Telegram request error (%s): %s", method, exc)
+        logger.error(f"Telegram request error ({method}): {exc}")
         return False
 
 

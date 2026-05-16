@@ -30,6 +30,8 @@ def get_stats():
         200  { "total_raised": float, "donor_count": int }
         500  { "error": "Could not retrieve stats." }
     """
+    logger.info("📊 Stats request received")
+    
     try:
         pipeline = [
             {"$match": {"status": "verified"}},
@@ -57,10 +59,12 @@ def get_stats():
         if results:
             total_raised = round(results[0]["total_raised"], 2)
             donor_count  = results[0]["donor_count"]
+            logger.info(f"✅ Stats: ${total_raised} from {donor_count} donors")
         else:
             # No verified donations yet — return zeros so the frontend animates from 0.
             total_raised = 0.0
             donor_count  = 0
+            logger.info("ℹ️  No verified donations yet")
 
         return jsonify({
             "total_raised": total_raised,
@@ -68,5 +72,5 @@ def get_stats():
         }), 200
 
     except PyMongoError as exc:
-        logger.exception("Stats aggregation failed: %s", exc)
+        logger.exception(f"❌ Stats aggregation failed: {exc}")
         return jsonify({"error": "Could not retrieve stats."}), 500

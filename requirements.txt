@@ -2,8 +2,8 @@
 Flask==3.0.3
 Flask-Cors==4.0.1
 
-# Database
-Flask-PyMongo==2.3.0
+# Database — Flask-PyMongo 2.x is broken with pymongo 4.x (mongo.db returns None)
+# Using pymongo directly instead.
 pymongo[srv]==4.6.3
 
 # File Storage & Integrations

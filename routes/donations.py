@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 from flask import Blueprint, current_app, jsonify, request
 from pymongo.errors import PyMongoError
 
-from app import mongo
 from config import Config
 from services.cloudinary_service import init_cloudinary, upload_images
 from services.telegram_service import send_donation_alert
@@ -24,7 +23,7 @@ from services.validators import ValidationError, validate_email, validate_images
 logger = logging.getLogger(__name__)
 donations_bp = Blueprint("donations", __name__)
 
-_cloudinary_ready = False  # initialised lazily on first request
+_cloudinary_ready = False
 
 
 def _ensure_cloudinary() -> None:
@@ -35,44 +34,22 @@ def _ensure_cloudinary() -> None:
 
 
 def _generate_ref_id(length: int = 10) -> str:
-    """Returns a human-readable reference like HFC-A3X9KZ."""
     alphabet = string.ascii_uppercase + string.digits
     return "HFC-" + "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-# ── POST /api/donate ──────────────────────────────────────────────────────────
-
 @donations_bp.post("/donate")
 def donate():
-    """
-    Accept a donation submission.
-
-    Form fields (multipart/form-data):
-        email      str  required
-        name       str  optional  (defaults to 'Anonymous')
-        anonymous  str  '1' = anonymous, '0' = show name
-        method     str  required  (btc | sol | usdt | amazon | apple | steam | sephora | razer)
-        amount     str  optional  gift-card face value
-        code       str  optional  gift-card code
-
-    Files (optional, up to 5):
-        proof_0 … proof_4
-
-    Returns:
-        201  { "success": true, "ref_id": "HFC-XXXXXXXXXX" }
-        400  { "error": "<validation message>" }
-        500  { "error": "Internal server error." }
-    """
     logger.info(f"📨 Incoming donation request from {request.remote_addr}")
     _ensure_cloudinary()
 
-    # ── 1. Extract & validate text fields ────────────────────────────────────
+    # ── 1. Validate text fields ───────────────────────────────────────────────
     try:
         email  = validate_email(request.form.get("email"))
         method = validate_method(request.form.get("method"))
         logger.info(f"✅ Validation passed: email={email}, method={method}")
     except ValidationError as exc:
-        logger.warning(f"❌ Validation error: {str(exc)}")
+        logger.warning(f"❌ Validation error: {exc}")
         return jsonify({"error": str(exc)}), 400
 
     is_anon = request.form.get("anonymous", "0") == "1"
@@ -80,39 +57,32 @@ def donate():
     amount  = request.form.get("amount", "").strip() or None
     code    = request.form.get("code", "").strip() or None
 
-    # ── 2. Collect & validate uploaded image files ────────────────────────────
-    raw_files = [
-        request.files[key]
-        for key in request.files
-        if key.startswith("proof_")
-    ]
-
+    # ── 2. Validate images ────────────────────────────────────────────────────
+    raw_files = [request.files[k] for k in request.files if k.startswith("proof_")]
     logger.info(f"📦 Received {len(raw_files)} file(s)")
 
     try:
         validated_files = validate_images(raw_files, max_count=Config.MAX_IMAGES)
-        logger.info(f"✅ Image validation passed: {len(validated_files)} file(s)")
     except ValidationError as exc:
-        logger.warning(f"❌ Image validation error: {str(exc)}")
+        logger.warning(f"❌ Image validation error: {exc}")
         return jsonify({"error": str(exc)}), 400
 
-    # ── 3. Upload images to Cloudinary ────────────────────────────────────────
+    # ── 3. Upload to Cloudinary ───────────────────────────────────────────────
     proof_urls: list[str] = []
     if validated_files:
         try:
-            logger.info(f"📤 Uploading {len(validated_files)} image(s) to Cloudinary...")
             upload_result = upload_images(validated_files, folder=Config.CLOUDINARY_FOLDER)
         except Exception as exc:
-            logger.exception(f"❌ Cloudinary upload pipeline failed: {exc}")
+            logger.exception(f"❌ Cloudinary upload failed: {exc}")
             return jsonify({"error": "Image upload failed. Please try again."}), 500
 
         if upload_result.has_errors:
             logger.warning(f"⚠️  Partial upload failure: {upload_result.errors}")
 
         proof_urls = upload_result.secure_urls
-        logger.info(f"✅ Uploaded {len(proof_urls)} image(s) successfully")
+        logger.info(f"✅ Uploaded {len(proof_urls)} image(s)")
 
-    # ── 4. Persist donation to MongoDB ────────────────────────────────────────
+    # ── 4. Save to MongoDB ────────────────────────────────────────────────────
     ref_id = _generate_ref_id()
     donation_doc = {
         "ref_id":     ref_id,
@@ -128,38 +98,29 @@ def donate():
     }
 
     try:
-        result = mongo.db.donations.insert_one(donation_doc)
-        logger.info(f"💾 Donation saved — ref={ref_id} mongo_id={result.inserted_id}")
+        result = current_app.db.donations.insert_one(donation_doc)
+        logger.info(f"💾 Donation saved — ref={ref_id} id={result.inserted_id}")
     except PyMongoError as exc:
         logger.exception(f"❌ MongoDB insert failed: {exc}")
         return jsonify({"error": "Database error. Please try again."}), 500
 
-    # ── 5. Send Telegram alert ────────────────────────────────────────────────
+    # ── 5. Telegram alert ─────────────────────────────────────────────────────
     try:
-        logger.info(f"📢 Sending Telegram alert for ref={ref_id}...")
         send_donation_alert(
             bot_token=Config.TELEGRAM_BOT_TOKEN,
             chat_id=Config.TELEGRAM_CHAT_ID,
             donation=donation_doc,
         )
-        logger.info(f"✅ Telegram alert sent")
+        logger.info("✅ Telegram alert sent")
     except Exception as exc:
-        logger.error(f"⚠️  Telegram notification failed (non-fatal): {exc}")
+        logger.error(f"⚠️  Telegram failed (non-fatal): {exc}")
 
     logger.info(f"✅ Donation complete: ref={ref_id}")
     return jsonify({"success": True, "ref_id": ref_id}), 201
 
 
-# ── POST /api/verify/<ref_id> (admin route) ───────────────────────────────────
-
 @donations_bp.post("/verify/<ref_id>")
 def verify_donation(ref_id: str):
-    """
-    Mark a pending donation as verified (admin only).
-
-    Headers:
-        X-Admin-Secret  str  required
-    """
     logger.info(f"🔐 Verification request for ref={ref_id}")
 
     admin_secret    = current_app.config.get("ADMIN_SECRET", "")
@@ -170,11 +131,11 @@ def verify_donation(ref_id: str):
         return jsonify({"error": "Server misconfiguration."}), 500
 
     if not provided_secret or provided_secret != admin_secret:
-        logger.warning(f"❌ Invalid admin secret attempt for ref={ref_id}")
+        logger.warning(f"❌ Invalid admin secret for ref={ref_id}")
         return jsonify({"error": "Forbidden."}), 403
 
     try:
-        result = mongo.db.donations.update_one(
+        result = current_app.db.donations.update_one(
             {"ref_id": ref_id, "status": "pending"},
             {"$set": {
                 "status":      "verified",
@@ -186,7 +147,7 @@ def verify_donation(ref_id: str):
         return jsonify({"error": "Database error."}), 500
 
     if result.matched_count == 0:
-        logger.warning(f"❌ No pending donation found: ref={ref_id}")
+        logger.warning(f"❌ No pending donation: ref={ref_id}")
         return jsonify({"error": f"No pending donation found with ref_id '{ref_id}'."}), 404
 
     logger.info(f"✅ Donation verified: ref={ref_id}")

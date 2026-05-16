@@ -8,17 +8,14 @@ import os
 import logging
 from flask import Flask
 from flask_cors import CORS
-from flask_pymongo import PyMongo
+from pymongo import MongoClient
 from config import Config
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-mongo = PyMongo()
 
 
 def create_app() -> Flask:
@@ -29,14 +26,7 @@ def create_app() -> Flask:
     logger.info(f"📍 Debug mode: {Config.DEBUG}")
     logger.info(f"🔐 Allowed origins: {Config.ALLOWED_ORIGINS}")
 
-    # ── CORS ─────────────────────────────────────────────────────────────────
-    # FIX: The original code passed send_wildcard as a top-level kwarg
-    # alongside a resources dict. In Flask-CORS 4.x these two config paths
-    # conflict — send_wildcard was ignored for per-resource entries, so "*"
-    # was never actually sent even when ALLOWED_ORIGINS=["*"].
-    # All options now live inside the per-resource dict where they are applied.
-    # When ALLOWED_ORIGINS is empty (misconfigured .env) we fall back to "*"
-    # so the app stays reachable in development.
+    # ── CORS ──────────────────────────────────────────────────────────────────
     origins = Config.ALLOWED_ORIGINS if Config.ALLOWED_ORIGINS else ["*"]
 
     CORS(
@@ -56,19 +46,14 @@ def create_app() -> Flask:
 
     logger.info(f"✅ CORS configured — origins: {origins}")
 
-    # ── Guarantee CORS headers on every response (including 4xx / 5xx) ───────
-    # Flask-CORS only patches successful responses. When an unhandled exception
-    # produces a 500 before the response object is built, the ACAO header is
-    # missing and the browser reports a CORS error instead of the real problem.
-    # This after_request hook ensures the header is always present.
+    # ── Guarantee CORS headers on every response including errors ─────────────
     @app.after_request
     def _add_cors_headers(response):
-        request_origin = None
         try:
             from flask import request as _req
             request_origin = _req.headers.get("Origin", "")
         except Exception:
-            pass
+            request_origin = ""
 
         if request_origin:
             if origins == ["*"]:
@@ -81,9 +66,15 @@ def create_app() -> Flask:
         response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, X-Admin-Secret")
         return response
 
-    # ── MongoDB ───────────────────────────────────────────────────────────────
-    mongo.init_app(app)
-    logger.info("✅ MongoDB initialized")
+    # ── MongoDB (direct pymongo — Flask-PyMongo 2.x is broken on pymongo 4.x) ─
+    try:
+        client = MongoClient(app.config["MONGO_URI"])
+        client.admin.command("ping")
+        app.db = client.get_default_database()
+        logger.info(f"✅ MongoDB connected — db: {app.db.name}")
+    except Exception as exc:
+        logger.exception(f"❌ MongoDB connection failed: {exc}")
+        raise
 
     # ── Blueprints ────────────────────────────────────────────────────────────
     from routes.donations import donations_bp
@@ -94,7 +85,7 @@ def create_app() -> Flask:
 
     logger.info("✅ Blueprints registered")
 
-    # ── Health-check (no auth needed) ─────────────────────────────────────────
+    # ── Health-check ──────────────────────────────────────────────────────────
     @app.get("/health")
     def health():
         return {"status": "ok", "service": "hearts-for-children-api"}, 200
@@ -114,7 +105,6 @@ def create_app() -> Flask:
         return {"error": "Internal server error"}, 500
 
     logger.info("✅ Hearts for Children API ready!")
-
     return app
 
 

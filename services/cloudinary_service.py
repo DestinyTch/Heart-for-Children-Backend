@@ -31,11 +31,12 @@ def init_cloudinary(app_config) -> None:
         api_secret=app_config.CLOUDINARY_API_SECRET,
         secure=True,           # always use HTTPS URLs
     )
-    logger.info("Cloudinary configured — cloud: %s", app_config.CLOUDINARY_CLOUD_NAME)
+    logger.info(f"☁️  Cloudinary configured — cloud: {app_config.CLOUDINARY_CLOUD_NAME}")
 
 
 @dataclass
 class UploadResult:
+    """Result of a batch upload operation."""
     secure_urls: list[str] = field(default_factory=list)
     public_ids:  list[str] = field(default_factory=list)
     errors:      list[str] = field(default_factory=list)
@@ -65,6 +66,7 @@ def upload_images(
         try:
             # Read bytes so we can re-seek if needed; avoid temp files on disk.
             raw = file.read()
+            logger.debug(f"📤 Uploading image {idx + 1}...")
             response = cloudinary.uploader.upload(
                 io.BytesIO(raw),
                 folder=folder,
@@ -77,7 +79,7 @@ def upload_images(
             public_id  = response["public_id"]
             result.secure_urls.append(secure_url)
             result.public_ids.append(public_id)
-            logger.info("Uploaded proof image %d → %s", idx + 1, public_id)
+            logger.info(f"📸 Uploaded proof {idx + 1} → {public_id}")
 
         except cloudinary.exceptions.Error as exc:
             msg = f"Cloudinary upload failed for image {idx + 1}: {exc}"

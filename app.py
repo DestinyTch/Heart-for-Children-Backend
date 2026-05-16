@@ -56,6 +56,31 @@ def create_app() -> Flask:
 
     logger.info(f"✅ CORS configured — origins: {origins}")
 
+    # ── Guarantee CORS headers on every response (including 4xx / 5xx) ───────
+    # Flask-CORS only patches successful responses. When an unhandled exception
+    # produces a 500 before the response object is built, the ACAO header is
+    # missing and the browser reports a CORS error instead of the real problem.
+    # This after_request hook ensures the header is always present.
+    @app.after_request
+    def _add_cors_headers(response):
+        request_origin = None
+        try:
+            from flask import request as _req
+            request_origin = _req.headers.get("Origin", "")
+        except Exception:
+            pass
+
+        if request_origin:
+            if origins == ["*"]:
+                response.headers["Access-Control-Allow-Origin"] = "*"
+            elif request_origin.rstrip("/") in [o.rstrip("/") for o in origins]:
+                response.headers["Access-Control-Allow-Origin"] = request_origin
+                response.headers["Vary"] = "Origin"
+
+        response.headers.setdefault("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, X-Admin-Secret")
+        return response
+
     # ── MongoDB ───────────────────────────────────────────────────────────────
     mongo.init_app(app)
     logger.info("✅ MongoDB initialized")

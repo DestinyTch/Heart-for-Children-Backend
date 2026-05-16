@@ -30,24 +30,31 @@ def create_app() -> Flask:
     logger.info(f"🔐 Allowed origins: {Config.ALLOWED_ORIGINS}")
 
     # ── CORS ─────────────────────────────────────────────────────────────────
-    # Allows cross-origin requests from whitelisted origins.
-    # Handles preflight OPTIONS requests automatically.
+    # FIX: The original code passed send_wildcard as a top-level kwarg
+    # alongside a resources dict. In Flask-CORS 4.x these two config paths
+    # conflict — send_wildcard was ignored for per-resource entries, so "*"
+    # was never actually sent even when ALLOWED_ORIGINS=["*"].
+    # All options now live inside the per-resource dict where they are applied.
+    # When ALLOWED_ORIGINS is empty (misconfigured .env) we fall back to "*"
+    # so the app stays reachable in development.
+    origins = Config.ALLOWED_ORIGINS if Config.ALLOWED_ORIGINS else ["*"]
+
     CORS(
         app,
         resources={
             r"/api/*": {
-                "origins": Config.ALLOWED_ORIGINS,
-                "methods": ["GET", "POST", "OPTIONS"],
-                "allow_headers": ["Content-Type", "X-Admin-Secret"],
-                "expose_headers": ["Content-Type"],
-                "max_age": 3600,
+                "origins":              origins,
+                "methods":              ["GET", "POST", "OPTIONS"],
+                "allow_headers":        ["Content-Type", "X-Admin-Secret"],
+                "expose_headers":       ["Content-Type"],
                 "supports_credentials": False,
+                "max_age":              3600,
+                "send_wildcard":        origins == ["*"],
             }
         },
-        send_wildcard=Config.ALLOWED_ORIGINS == ["*"],
     )
 
-    logger.info("✅ CORS configured")
+    logger.info(f"✅ CORS configured — origins: {origins}")
 
     # ── MongoDB ───────────────────────────────────────────────────────────────
     mongo.init_app(app)

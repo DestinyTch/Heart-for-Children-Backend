@@ -1,7 +1,7 @@
 """
 routes/donations.py
 ====================
-POST /api/donate   — accept a donation (multipart/form-data)
+POST /api/donate          — accept a donation (multipart/form-data)
 POST /api/verify/<ref_id> — admin-only: mark a donation verified
 """
 
@@ -156,15 +156,13 @@ def donate():
 def verify_donation(ref_id: str):
     """
     Mark a pending donation as verified (admin only).
-    Protect this endpoint with an ADMIN_SECRET header.
 
     Headers:
         X-Admin-Secret  str  required
     """
     logger.info(f"🔐 Verification request for ref={ref_id}")
 
-    # Simple secret-header guard
-    admin_secret = current_app.config.get("ADMIN_SECRET", "")
+    admin_secret    = current_app.config.get("ADMIN_SECRET", "")
     provided_secret = request.headers.get("X-Admin-Secret", "")
 
     if not admin_secret:

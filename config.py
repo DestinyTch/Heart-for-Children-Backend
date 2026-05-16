@@ -27,10 +27,26 @@ class Config:
     TELEGRAM_BOT_TOKEN: str = os.environ["TELEGRAM_BOT_TOKEN"]
     TELEGRAM_CHAT_ID: str   = os.environ["TELEGRAM_CHAT_ID"]
 
+    # ── Admin ─────────────────────────────────────────────────────────────────
+    # FIX: was never declared here, so current_app.config.get("ADMIN_SECRET")
+    # always returned "" → verify endpoint always 500'd with "Server misconfiguration".
+    ADMIN_SECRET: str = os.environ.get("ADMIN_SECRET", "")
+
     # ── CORS ──────────────────────────────────────────────────────────────────
-    # Comma-separated list in .env, e.g. https://heartsforchildren.org,https://www.heartsforchildren.org
-    _origins_raw: str = os.environ.get("ALLOWED_ORIGINS")
-    ALLOWED_ORIGINS: list[str] = [o.strip() for o in _origins_raw.split(",") if o.strip()]
+    # FIX 1: os.environ.get() returns None when var is absent; None.split()
+    #         crashes the app before CORS is ever configured.
+    # FIX 2: .env had the full page URL with path + trailing slash
+    #         (https://destinytch.github.io/Heart-for-Children/).
+    #         Browsers send ONLY scheme+host as the Origin header
+    #         (https://destinytch.github.io), so Flask-CORS never matched
+    #         → ACAO header was never added → browser blocked every request.
+    #         rstrip("/") normalises both cases reliably.
+    _origins_raw: str = os.environ.get("ALLOWED_ORIGINS", "")
+    ALLOWED_ORIGINS: list[str] = [
+        o.strip().rstrip("/")
+        for o in _origins_raw.split(",")
+        if o.strip()
+    ]
 
     # ── Upload constraints ────────────────────────────────────────────────────
     MAX_IMAGES: int       = 5

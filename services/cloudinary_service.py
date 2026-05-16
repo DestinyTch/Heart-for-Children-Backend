@@ -4,7 +4,7 @@ services/cloudinary_service.py
 Handles all Cloudinary interactions.
 - Configures the SDK once from Flask app config.
 - Uploads a list of FileStorage objects sequentially and returns their secure URLs.
-- Returns a typed result object so callers can distinguish success from failure.
+- Returns a typed result object so callers can distinguish success from partial failure.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import cloudinary
 import cloudinary.uploader
+import cloudinary.exceptions
 
 if TYPE_CHECKING:
     from werkzeug.datastructures import FileStorage
@@ -24,14 +25,22 @@ logger = logging.getLogger(__name__)
 
 
 def init_cloudinary(app_config) -> None:
-    """Call once during app initialisation to configure the Cloudinary SDK."""
+    """
+    Call once during app initialisation to configure the Cloudinary SDK.
+
+    FIX: The original code used attribute access (app_config.CLOUDINARY_CLOUD_NAME).
+    Flask's app.config is a dict subclass — values live in the dict, NOT as object
+    attributes. Attribute access silently returned None for every key, meaning every
+    upload was attempted with an unconfigured SDK and failed with a credentials error.
+    Corrected to dict-style access (app_config["KEY"]).
+    """
     cloudinary.config(
-        cloud_name=app_config.CLOUDINARY_CLOUD_NAME,
-        api_key=app_config.CLOUDINARY_API_KEY,
-        api_secret=app_config.CLOUDINARY_API_SECRET,
+        cloud_name=app_config["CLOUDINARY_CLOUD_NAME"],
+        api_key=app_config["CLOUDINARY_API_KEY"],
+        api_secret=app_config["CLOUDINARY_API_SECRET"],
         secure=True,           # always use HTTPS URLs
     )
-    logger.info(f"☁️  Cloudinary configured — cloud: {app_config.CLOUDINARY_CLOUD_NAME}")
+    logger.info(f"☁️  Cloudinary configured — cloud: {app_config['CLOUDINARY_CLOUD_NAME']}")
 
 
 @dataclass

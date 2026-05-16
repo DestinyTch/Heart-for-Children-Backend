@@ -14,13 +14,16 @@ hearts-api/
 ├── .env.example                  # Copy → .env, fill in secrets
 ├── .gitignore
 ├── routes/
+│   ├── __init__.py
 │   ├── donations.py              # POST /api/donate, POST /api/verify/<ref_id>
 │   └── stats.py                  # GET /api/stats
 ├── services/
+│   ├── __init__.py
 │   ├── cloudinary_service.py     # SDK init + sequential image upload
 │   ├── telegram_service.py       # sendMessage + sendMediaGroup
 │   └── validators.py             # Pure validation (email, method, images)
 └── tests/
+    ├── __init__.py
     └── test_validators.py        # Pytest unit tests for validation logic
 ```
 
@@ -52,6 +55,11 @@ cp .env.example .env
 | `TELEGRAM_BOT_TOKEN` | Create a bot via [@BotFather](https://t.me/BotFather) |
 | `TELEGRAM_CHAT_ID` | Message [@userinfobot](https://t.me/userinfobot) |
 | `ADMIN_SECRET` | Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `ALLOWED_ORIGINS` | Your frontend origin — **scheme + host only, no trailing slash** |
+
+> ⚠️ **CORS gotcha**: `ALLOWED_ORIGINS` must be the bare origin, not a page URL.
+> - ✅ `https://destinytch.github.io`
+> - ❌ `https://destinytch.github.io/Heart-for-Children/`
 
 ### 3. Run the development server
 
@@ -92,7 +100,7 @@ Accepts a multipart/form-data donation submission.
 | `method` | string | ✅ | `btc`, `sol`, `usdt`, `amazon`, `apple`, `steam`, `sephora`, `razer` |
 | `amount` | string | — | Gift card face value in USD |
 | `code` | string | — | Gift card redemption code |
-| `proof_0` … `proof_4` | file | — | Up to 5 images (JPEG/PNG/WEBP, max 5 MB each) |
+| `proof_0` … `proof_4` | file | — | Up to 5 images (JPEG/PNG/WEBP/GIF, max 5 MB each) |
 
 **Response `201`**
 ```json
@@ -131,7 +139,7 @@ X-Admin-Secret: <your ADMIN_SECRET value>
 
 **cURL example**
 ```bash
-curl -X POST http://127.0.0.1:5000/api/verify/HFC-A3X9KZ7Q2F \
+curl -X POST https://your-api.com/api/verify/HFC-A3X9KZ7Q2F \
      -H "X-Admin-Secret: your_admin_secret_here"
 ```
 
@@ -179,7 +187,7 @@ pytest tests/ -v
 
 - [ ] Set `FLASK_DEBUG=false` in production `.env`
 - [ ] Use a production WSGI server: `gunicorn -w 4 "app:create_app()"`
-- [ ] Restrict `ALLOWED_ORIGINS` to your live frontend domain
+- [ ] Set `ALLOWED_ORIGINS` to your live frontend origin (no path, no trailing slash)
 - [ ] Set a strong `ADMIN_SECRET` (32+ character hex)
 - [ ] Enable MongoDB Atlas IP whitelist
 - [ ] Store `.env` as platform secrets (Heroku Config Vars, Railway Variables, etc.)

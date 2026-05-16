@@ -90,8 +90,8 @@ def send_donation_alert(
     Returns True if the text message was sent successfully.
     """
     text_payload = {
-        "chat_id": chat_id,
-        "text": _build_message(donation),
+        "chat_id":    chat_id,
+        "text":       _build_message(donation),
         "parse_mode": "Markdown",
     }
     ok = _post(bot_token, "sendMessage", text_payload)
@@ -104,13 +104,13 @@ def send_donation_alert(
             item: dict[str, Any] = {"type": "photo", "media": url}
             # Caption only on the first image to avoid spam
             if i == 0:
-                item["caption"] = f"Proof images for ref `{donation.get('ref_id', '')}`"
+                item["caption"]    = f"Proof images for ref `{donation.get('ref_id', '')}`"
                 item["parse_mode"] = "Markdown"
             media.append(item)
 
         album_payload = {
             "chat_id": chat_id,
-            "media": media,
+            "media":   media,
         }
         _post(bot_token, "sendMediaGroup", album_payload)
 

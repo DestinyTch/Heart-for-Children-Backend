@@ -31,7 +31,7 @@ def get_stats():
         500  { "error": "Could not retrieve stats." }
     """
     logger.info("📊 Stats request received")
-    
+
     try:
         pipeline = [
             {"$match": {"status": "verified"}},
@@ -42,8 +42,8 @@ def get_stats():
                         # amount is stored as a string (from form input); cast to double safely.
                         "$sum": {
                             "$convert": {
-                                "input": "$amount",
-                                "to":    "double",
+                                "input":   "$amount",
+                                "to":      "double",
                                 "onError": 0,
                                 "onNull":  0,
                             }

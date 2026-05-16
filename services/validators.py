@@ -55,8 +55,9 @@ def validate_images(
     Validate a list of uploaded FileStorage objects.
     Checks:
     - Count ≤ max_count
-    - MIME type is an allowed image type (checks the stream magic bytes via mimetype)
+    - MIME type is an allowed image type
     - File size ≤ MAX_IMAGE_BYTES
+
     Returns the validated list (unchanged) or raises ValidationError.
     """
     if len(files) > max_count:
